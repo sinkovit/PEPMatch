@@ -111,7 +111,7 @@ impl PepIndex {
 
     /// Binary search on raw bytes, which works because preprocess wrote the k-mers sorted and
     /// all exactly k long.
-    fn lookup(&self, kmer: &[u8]) -> Option<Vec<u64>> {
+    fn lookup(&self, kmer: &[u8]) -> Option<&[u8]> { //RSS Option<Vec<u64>>
         let mut lo = 0usize;
         let mut hi = self.num_kmers;
 
@@ -120,16 +120,16 @@ impl PepIndex {
             let mid_kmer = self.kmer_at(mid);
             match mid_kmer.cmp(kmer) {
                 std::cmp::Ordering::Equal => {
-                    let pos_bytes = self.positions_at(mid);
-                    let count = pos_bytes.len() / 8;
-                    let mut positions = Vec::with_capacity(count);
-                    for i in 0..count {
-                        let idx = u64::from_le_bytes(
-                            pos_bytes[i * 8..(i + 1) * 8].try_into().unwrap(),
-                        );
-                        positions.push(idx);
-                    }
-                    return Some(positions);
+                    //RSS let pos_bytes = self.positions_at(mid);
+                    //RSS let count = pos_bytes.len() / 8;
+                    //RSS let mut positions = Vec::with_capacity(count);
+                    //RSS for i in 0..count {
+                    //RSS     let idx = u64::from_le_bytes(
+                    //RSS         pos_bytes[i * 8..(i + 1) * 8].try_into().unwrap(),
+                    //RSS     );
+                    //RSS     positions.push(idx);
+                    //RSS }
+                    return Some(self.positions_at(mid)); //RSS Some(positions)
                 }
                 std::cmp::Ordering::Less => lo = mid + 1,
                 std::cmp::Ordering::Greater => hi = mid,
@@ -185,6 +185,12 @@ fn hamming(a: &[u8], b: &[u8]) -> usize {
     a.iter().zip(b).filter(|(x, y)| x != y).count()
 }
 
+fn decoded_positions(bytes: &[u8]) -> impl Iterator<Item = u64> + '_ { //RSS
+    bytes.chunks_exact(8).map(|chunk| {                                //RSS
+        u64::from_le_bytes(chunk.try_into().unwrap())                  //RSS
+    })                                                                 //RSS
+}                                                                      //RSS
+
 fn exact_match(peptide: &str, k: usize, index: &PepIndex) -> Vec<u64> {
     let pep_bytes = peptide.as_bytes();
     if pep_bytes.len() < k {
@@ -209,7 +215,7 @@ fn exact_match(peptide: &str, k: usize, index: &PepIndex) -> Vec<u64> {
     for &idx in &target_indices {
         let kmer = &pep_bytes[idx..idx + k];
         if let Some(positions) = index.lookup(kmer) {
-            for db_index in positions {
+            for db_index in decoded_positions(positions) { //RSS positions
                 let candidate = db_index - idx as u64;
                 *hit_counts.entry(candidate).or_insert(0) += 1;
             }
@@ -316,7 +322,7 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
         while idx < num_kmers {
             let kmer = &pep_bytes[idx..idx + k];
             if let Some(positions) = index.lookup(kmer) {
-                for kmer_hit in positions {
+                for kmer_hit in decoded_positions(positions) { //RSS positions
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     // Several seeds in one peptide imply the same start; keep one row each.
                     if seen.contains(&start) { continue; }
@@ -350,7 +356,7 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
         for idx in 0..num_kmers {
             let kmer = &pep_bytes[idx..idx + k];
             if let Some(positions) = index.lookup(kmer) {
-                for kmer_hit in positions {
+                for kmer_hit in decoded_positions(positions) { //RSS positions
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     if seen.contains(&start) { continue; }
                     let mismatches = check_left_residues(pep_bytes, idx, kmer_hit, index, max_mismatches, 0);
@@ -794,7 +800,7 @@ fn indel_search_peptide(
 
     for (seed_bytes, q_seed_start) in &seeds {
         if let Some(hit_positions) = index.lookup(seed_bytes) {
-            for encoded_hit in hit_positions {
+            for encoded_hit in decoded_positions(hit_positions) { //RSS hit_positions
                 let prot_num = (encoded_hit / PROTEIN_INDEX_MULTIPLIER) as usize;
                 if prot_num == 0 || prot_num > index.num_proteins {
                     continue;
@@ -898,7 +904,7 @@ fn mismatch_count(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
         while idx < num_kmers {
             let kmer = &pep_bytes[idx..idx + k];
             if let Some(positions) = index.lookup(kmer) {
-                for kmer_hit in positions {
+                for kmer_hit in decoded_positions(positions) { //RSS positions
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     if seen.contains(&start) { continue; }
                     let mismatches = check_left_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, 0);
@@ -923,7 +929,7 @@ fn mismatch_count(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
         for idx in 0..num_kmers {
             let kmer = &pep_bytes[idx..idx + k];
             if let Some(positions) = index.lookup(kmer) {
-                for kmer_hit in positions {
+                for kmer_hit in decoded_positions(positions) { //RSS positions
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     if seen.contains(&start) { continue; }
                     let mismatches = check_left_residues(pep_bytes, idx, kmer_hit, index, max_mismatches, 0);

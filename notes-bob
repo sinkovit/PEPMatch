@@ -1,0 +1,6 @@
+activate_project
+deactivate # when finished
+maturin develop --release
+
+# Disables parallelization and times code
+time RAYON_NUM_THREADS=1 pepmatch-match -q benchmarking/queries/milk-peptides-test.fasta -p benchmarking/proteomes/human.fasta -b -o milk-best-match
