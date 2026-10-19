@@ -20,10 +20,15 @@ struct PepIndex {
     seq_len: usize,
     protein_offsets_offset: usize,
     metadata_offsets_offset: usize,
-    metadata_offset: usize,
-    kmer_offsets_offset: usize,
-    kmer_data_offset: usize,
-    num_kmers: usize,
+    //RSS metadata_offset: usize,
+    //RSS kmer_offsets_offset: usize,
+    //RSS kmer_data_offset: usize,
+    //RSS num_kmers: usize,
+    metadata_offset: usize,     //RSS
+    kmer_keys_offset: usize,    //RSS
+    kmer_offsets_offset: usize, //RSS
+    kmer_data_offset: usize,    //RSS
+    num_kmers: usize,           //RSS
 }
 
 // Sound because the mapping is opened read-only and never mutated; the rayon workers in
@@ -32,6 +37,7 @@ unsafe impl Sync for PepIndex {}
 
 impl PepIndex {
     fn open(path: &str) -> Self {
+        println!("Greetings");
         let file = File::open(path).expect("Cannot open .pepidx file");
         let mmap = unsafe { Mmap::map(&file).expect("Cannot mmap file") };
 
@@ -51,14 +57,21 @@ impl PepIndex {
         let seq_offset = HEADER_SIZE;
         let protein_offsets_offset = seq_offset + seq_len;
         let metadata_offsets_offset = protein_offsets_offset + num_proteins * 8;
-        let metadata_offset = metadata_offsets_offset + num_proteins * 8;
-        let kmer_offsets_offset = metadata_offset + metadata_buf_len;
-        let kmer_data_offset = kmer_offsets_offset + num_kmers * 8;
 
-        PepIndex {
+	//RSS let metadata_offset = metadata_offsets_offset + num_proteins * 8;
+        //RSS let kmer_offsets_offset = metadata_offset + metadata_buf_len;
+        //RSS let kmer_data_offset = kmer_offsets_offset + num_kmers * 8;
+
+	let metadata_offset = metadata_offsets_offset + num_proteins * 8; //RSS
+        let kmer_keys_offset = metadata_offset + metadata_buf_len;        //RSS
+        let kmer_offsets_offset = kmer_keys_offset + num_kmers * k;       //RSS
+        let kmer_data_offset = kmer_offsets_offset + num_kmers * 8;       //RSS
+
+        PepIndex { //RSS Added kmer_keys_offset
             mmap, k, num_proteins, seq_offset, seq_len,
             protein_offsets_offset, metadata_offsets_offset,
-            metadata_offset, kmer_offsets_offset, kmer_data_offset, num_kmers,
+            metadata_offset, kmer_keys_offset, kmer_offsets_offset,
+	    kmer_data_offset, num_kmers,
         }
     }
 
@@ -97,17 +110,35 @@ impl PepIndex {
         u64::from_le_bytes(self.mmap[pos..pos + 8].try_into().unwrap()) as usize
     }
 
-    fn kmer_at(&self, kmer_index: usize) -> &[u8] {
-        let offset = self.kmer_data_offset + self.kmer_offset(kmer_index);
+    //RSS Start new code
+    /// Key i occupies exactly k bytes in the contiguous key array.
+    fn kmer_at(&self, kmer_index: usize) -> &[u8] {   
+        let offset = self.kmer_keys_offset + kmer_index * self.k;
         &self.mmap[offset..offset + self.k]
     }
 
+    /// Occurrence data starts at the offset-table entry for this k-mer:
+    /// [u32 count][count * u64 encoded positions].
     fn positions_at(&self, kmer_index: usize) -> &[u8] {
-        let offset = self.kmer_data_offset + self.kmer_offset(kmer_index) + self.k;
-        let count = u32::from_le_bytes(self.mmap[offset..offset + 4].try_into().unwrap()) as usize;
+        let offset = self.kmer_data_offset + self.kmer_offset(kmer_index);
+        let count =
+            u32::from_le_bytes(self.mmap[offset..offset + 4].try_into().unwrap()) as usize;
         let data_start = offset + 4;
         &self.mmap[data_start..data_start + count * 8]
     }
+    //RSS End new code
+
+    //RSS fn kmer_at(&self, kmer_index: usize) -> &[u8] {
+    //RSS     let offset = self.kmer_data_offset + self.kmer_offset(kmer_index);
+    //RSS     &self.mmap[offset..offset + self.k]
+    //RSS }
+
+    //RSS fn positions_at(&self, kmer_index: usize) -> &[u8] {
+    //RSS     let offset = self.kmer_data_offset + self.kmer_offset(kmer_index) + self.k;
+    //RSS     let count = u32::from_le_bytes(self.mmap[offset..offset + 4].try_into().unwrap()) as usize;
+    //RSS     let data_start = offset + 4;
+    //RSS     &self.mmap[data_start..data_start + count * 8]
+    //RSS }
 
     /// Binary search on raw bytes, which works because preprocess wrote the k-mers sorted and
     /// all exactly k long.

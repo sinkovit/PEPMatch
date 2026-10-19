@@ -270,7 +270,10 @@ impl ChunkReader {
 /// k-mer data. Every section start is derivable from the fixed-size header, which is what
 /// lets the query side mmap the file and binary-search it without parsing.
 fn write_pepidx(path: &str, k: usize, proteins: &[Protein], metadata_list: &[Metadata]) {
-    let file = File::create(path).expect("Cannot create output file");
+
+   println!("Hello from write_pepidx mod 1");
+
+   let file = File::create(path).expect("Cannot create output file");
     let mut writer = BufWriter::new(file);
 
     // Sequences live end to end in one buffer; `protein_offsets` is the only record of where
@@ -381,30 +384,69 @@ fn write_pepidx(path: &str, k: usize, proteins: &[Protein], metadata_list: &[Met
         std::fs::remove_file(chunk_path).ok();
     }
 
-    // Final pass records where each k-mer's record starts — the table the query-side binary
-    // search indexes into.
+    //RSS // Final pass records where each k-mer's record starts — the table the query-side binary
+    //RSS // search indexes into.
+    //RSS let mut merged_reader = ChunkReader::new(&merged_path, k);
+    //RSS let mut kmer_offsets: Vec<u64> = Vec::with_capacity(num_unique_kmers as usize);
+    //RSS let mut kmer_data: Vec<u8> = Vec::new();
+    //RSS 
+    //RSS loop {
+    //RSS     match merged_reader.current_kmer {
+    //RSS         None => break,
+    //RSS         Some(kmer) => {
+    //RSS             kmer_offsets.push(kmer_data.len() as u64);
+    //RSS             let kmer_bytes = &kmer.to_be_bytes()[16 - k..];
+    //RSS             kmer_data.extend_from_slice(kmer_bytes);
+    //RSS             kmer_data.extend_from_slice(&(merged_reader.current_positions.len() as u32).to_le_bytes());
+    //RSS             for &pos in &merged_reader.current_positions {
+    //RSS                 kmer_data.extend_from_slice(&pos.to_le_bytes());
+    //RSS             }
+    //RSS             merged_reader.advance();
+    //RSS         }
+    //RSS     }
+    //RSS }
+
+
+    //RSS Start new code
+    // Final pass builds three separate structures:
+    // - kmer_keys: all sorted k-mer keys, each exactly k bytes
+    // - kmer_offsets: offsets into kmer_data, one per k-mer
+    // - kmer_data: occurrence count followed by the positions for each k-mer
     let mut merged_reader = ChunkReader::new(&merged_path, k);
-    let mut kmer_offsets: Vec<u64> = Vec::with_capacity(num_unique_kmers as usize);
+    let mut kmer_keys: Vec<u8> =
+        Vec::with_capacity(num_unique_kmers as usize * k);
+    let mut kmer_offsets: Vec<u64> =
+        Vec::with_capacity(num_unique_kmers as usize);
     let mut kmer_data: Vec<u8> = Vec::new();
 
     loop {
         match merged_reader.current_kmer {
             None => break,
             Some(kmer) => {
-                kmer_offsets.push(kmer_data.len() as u64);
+                // Save this k-mer's key in the contiguous fixed-width key array.
                 let kmer_bytes = &kmer.to_be_bytes()[16 - k..];
-                kmer_data.extend_from_slice(kmer_bytes);
-                kmer_data.extend_from_slice(&(merged_reader.current_positions.len() as u32).to_le_bytes());
+                kmer_keys.extend_from_slice(kmer_bytes);
+
+                // Record where this k-mer's occurrence data begins.
+                kmer_offsets.push(kmer_data.len() as u64);
+
+                // Store the occurrence count, followed by the positions.
+                kmer_data.extend_from_slice(
+                    &(merged_reader.current_positions.len() as u32).to_le_bytes()
+                );
                 for &pos in &merged_reader.current_positions {
                     kmer_data.extend_from_slice(&pos.to_le_bytes());
                 }
+
                 merged_reader.advance();
             }
         }
     }
+    //RSS End new code
 
     std::fs::remove_file(&merged_path).ok();
-    writer.write_all(b"PEPIDX05").unwrap();
+    //RSS writer.write_all(b"PEPIDX05").unwrap();
+    writer.write_all(b"PEPIDX06").unwrap(); //RSS
     writer.write_all(&(k as u8).to_le_bytes()).unwrap();
     writer.write_all(&(proteins.len() as u32).to_le_bytes()).unwrap();
     writer.write_all(&(concat_seq.len() as u64).to_le_bytes()).unwrap();
@@ -419,11 +461,26 @@ fn write_pepidx(path: &str, k: usize, proteins: &[Protein], metadata_list: &[Met
         writer.write_all(&offset.to_le_bytes()).unwrap();
     }
     writer.write_all(&metadata_buf).unwrap();
+
+    //RSS Start new code
+    // Sorted fixed-width keys: key i starts at byte i * k.
+    writer.write_all(&kmer_keys).unwrap();
+
+    // One offset per key, pointing into kmer_data.
     for &offset in &kmer_offsets {
         writer.write_all(&offset.to_le_bytes()).unwrap();
     }
+
+    // Counts and occurrence positions, stored separately from the keys.
     writer.write_all(&kmer_data).unwrap();
     writer.flush().unwrap();
+    //RSS End new code
+
+    //RSS for &offset in &kmer_offsets {
+    //RSS     writer.write_all(&offset.to_le_bytes()).unwrap();
+    //RSS }
+    //RSS writer.write_all(&kmer_data).unwrap();
+    //RSS writer.flush().unwrap();
 }
 
 pub(crate) fn run(fasta_path: &str, k: usize, output_path: &str) {
