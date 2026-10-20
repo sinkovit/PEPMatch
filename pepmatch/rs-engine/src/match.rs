@@ -319,7 +319,8 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
                 for kmer_hit in positions {
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     // Several seeds in one peptide imply the same start; keep one row each.
-                    if seen.contains(&start) { continue; }
+                    //RSS if seen.contains(&start) { continue; }
+                    if !seen.insert(start) { continue; } //RSS
                     let mismatches = check_left_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, 0);
                     let mismatches = check_right_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
                     if mismatches <= max_mismatches {
@@ -336,7 +337,7 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
                             i += k;
                         }
                         if valid {
-                            seen.insert(start);
+                            //RSS seen.insert(start);
                             matches.push((String::from_utf8(matched).unwrap_or_default(), mismatches, start));
                         }
                     }
@@ -352,7 +353,8 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
             if let Some(positions) = index.lookup(kmer) {
                 for kmer_hit in positions {
                     let start = (kmer_hit as i64 - idx as i64) as u64;
-                    if seen.contains(&start) { continue; }
+                    //RSS if seen.contains(&start) { continue; }
+                    if !seen.insert(start) { continue; } //RSS
                     let mismatches = check_left_residues(pep_bytes, idx, kmer_hit, index, max_mismatches, 0);
                     let mismatches = check_right_residues(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
                     if mismatches <= max_mismatches {
@@ -378,7 +380,7 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
                             i += k;
                         }
                         if valid {
-                            seen.insert(start);
+                            //RSS seen.insert(start);
                             matches.push((String::from_utf8(matched).unwrap_or_default(), mismatches, start));
                         }
                     }
