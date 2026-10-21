@@ -35,6 +35,8 @@ impl PepIndex {
         let file = File::open(path).expect("Cannot open .pepidx file");
         let mmap = unsafe { Mmap::map(&file).expect("Cannot mmap file") };
 
+	println!("Hi bob");
+
         let mut pos = 8;
         let k = mmap[pos] as usize;
         pos += 1;
@@ -320,9 +322,20 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     // Several seeds in one peptide imply the same start; keep one row each.
                     if seen.contains(&start) { continue; }
-                    let mismatches = check_left_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, 0);
-                    let mismatches = check_right_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
-                    if mismatches <= max_mismatches {
+
+		    //RSS let mismatches = check_left_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, 0);
+                    //RSS let mismatches = check_right_neighbors(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
+
+		    //RSS Start new code
+		    let mut mismatches = check_left_neighbors(
+    		    pep_bytes, idx, kmer_hit, index, k, max_mismatches, 0);
+		    if mismatches <= max_mismatches {
+    		       mismatches = check_right_neighbors(
+        	       pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
+		    }
+		    //RSS End new code
+
+		    if mismatches <= max_mismatches {
                         // Rebuild the database sequence tile by tile; a tile that fails to
                         // resolve means the match would cross a protein boundary.
                         let mut matched = Vec::with_capacity(peptide_len);
@@ -353,9 +366,22 @@ fn mismatch_match(peptide: &str, k: usize, max_mismatches: usize, index: &PepInd
                 for kmer_hit in positions {
                     let start = (kmer_hit as i64 - idx as i64) as u64;
                     if seen.contains(&start) { continue; }
-                    let mismatches = check_left_residues(pep_bytes, idx, kmer_hit, index, max_mismatches, 0);
-                    let mismatches = check_right_residues(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
-                    if mismatches <= max_mismatches {
+
+
+		    //RSS let mismatches = check_left_residues(pep_bytes, idx, kmer_hit, index, max_mismatches, 0);
+                    //RSS let mismatches = check_right_residues(pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
+
+		    //RSS Start new code
+		    let mut mismatches = check_left_residues(
+		    	pep_bytes, idx, kmer_hit, index, max_mismatches, 0);
+		    if mismatches <= max_mismatches {
+    		       mismatches = check_right_residues(
+		       pep_bytes, idx, kmer_hit, index, k, max_mismatches, mismatches);
+		    }
+		    //RSS End new code
+		    
+
+		    if mismatches <= max_mismatches {
                         let mut matched = Vec::with_capacity(peptide_len);
                         let mut i = 0;
                         let mut valid = true;
